@@ -1,0 +1,8 @@
+# Preserve upstream distributions and license text byte-for-byte.
+Vendor/** -text -whitespace
+Tests/rar-upstream-test.c -text -whitespace
+*.png binary
+*.jpg binary
+*.icns binary
+*.7z binary
+*.rar binary

@@ -1,0 +1,44 @@
+# Build products and local verification output
+.build/
+dist/
+Reports/
+DerivedData/
+*.dSYM/
+*.xcuserstate
+xcuserdata/
+
+# Local macOS metadata
+.DS_Store
+.AppleDouble
+.Spotlight-V100/
+.Trashes/
+
+# Credentials and signing material
+.env
+.env.*
+!.env.example
+credentials.json
+credentials.*.json
+secrets.json
+*.p12
+*.p8
+*.pem
+*.keychain
+*.keychain-db
+
+# Runtime password lists, settings, and user input
+PasswordLists/
+Runtime/
+Archives/
+ArchivBatch-Passwoerter*.txt
+ArchivBatch-Passwords*.txt
+passwords.txt
+passwoerter.txt
+password-list.txt
+*.tmp
+*.log
+
+# Release archives belong in GitHub Releases, not the source tree
+/*.zip
+/*.rar
+/*.7z

@@ -1,0 +1,54 @@
+name: Bug report
+description: Report a reproducible problem with ArchivBatch.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the smallest example that reproduces the issue. If you attach an archive, use synthetic contents and a test password.
+  - type: input
+    id: app-version
+    attributes:
+      label: ArchivBatch version
+      placeholder: "1.1.0"
+    validations:
+      required: true
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+      placeholder: "macOS 15.7"
+    validations:
+      required: true
+  - type: dropdown
+    id: chip
+    attributes:
+      label: Mac chip
+      options:
+        - Apple Silicon
+        - Intel
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include the archive format and whether the issue involves extraction, import, or password-file storage.
+      placeholder: |
+        1. Open ArchivBatch.
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: Include the visible status or error text. Redact passwords and private paths from screenshots.
+    validations:
+      required: true
