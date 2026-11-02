@@ -1,6 +1,6 @@
 # Preserve upstream distributions and license text byte-for-byte.
-Vendor/** -text -whitespace
-Tests/rar-upstream-test.c -text -whitespace
+Vendor/** -text -whitespace linguist-vendored
+Tests/rar-upstream-test.c -text -whitespace linguist-vendored
 *.png binary
 *.jpg binary
 *.icns binary
