@@ -311,15 +311,31 @@ struct EngineIntegrationTests {
                         while Date() < deadline {
                             if let text = try? String(contentsOf: pidFile, encoding: .utf8),
                                let pid = Int32(text.trimmingCharacters(in: .whitespacesAndNewlines)) {
-                                Thread.sleep(forTimeInterval: 0.02)
-                                cancelledDuringProcess.lock()
-                                liveProcessConfirmed = Darwin.kill(pid, 0) == 0
-                                cancelledDuringProcess.unlock()
-                                engine.cancel()
-                                cancellationObserved.signal()
-                                return
+                                // The wrapper keeps its PID across exec. Wait for the actual
+                                // 7zz image instead of assuming a fixed delay is long enough.
+                                var pathBuffer = [CChar](repeating: 0, count: 4096)
+                                let pathLength = proc_pidpath(pid, &pathBuffer, UInt32(pathBuffer.count))
+                                let image = pathLength > 0 ? String(cString: pathBuffer) : ""
+                                if URL(fileURLWithPath: image).lastPathComponent == sevenZip.lastPathComponent,
+                                   Darwin.kill(pid, SIGSTOP) == 0 {
+                                    // Freeze the confirmed child before requesting cancellation:
+                                    // a fast machine must not finish between the assertion and cancel().
+                                    defer { _ = Darwin.kill(pid, SIGCONT) }
+                                    var stoppedPath = [CChar](repeating: 0, count: 4096)
+                                    let stoppedLength = proc_pidpath(pid, &stoppedPath, UInt32(stoppedPath.count))
+                                    if stoppedLength > 0,
+                                       String(cString: stoppedPath) == image,
+                                       Darwin.kill(pid, 0) == 0 {
+                                        cancelledDuringProcess.lock()
+                                        liveProcessConfirmed = true
+                                        cancelledDuringProcess.unlock()
+                                        engine.cancel()
+                                        cancellationObserved.signal()
+                                        return
+                                    }
+                                }
                             }
-                            Thread.sleep(forTimeInterval: 0.002)
+                            Thread.sleep(forTimeInterval: 0.0002)
                         }
                         engine.cancel()
                         cancellationObserved.signal()
