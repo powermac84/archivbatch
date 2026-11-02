@@ -1,15 +1,20 @@
 import Foundation
 import Darwin
 
+enum EnginePhase {
+    case testing
+    case extracting
+}
+
 enum EngineEvent {
     case attempt(Int?)
-    case progress(String)
+    case progress(EnginePhase, LocalizedMessage)
 }
 
 enum EngineOutcome {
     case success(URL, Int?)
-    case noMatch(String)
-    case failure(String)
+    case noMatch(LocalizedMessage)
+    case failure(LocalizedMessage)
     case cancelled
 }
 
@@ -127,7 +132,7 @@ final class ArchiveEngine {
         let (output, truncated) = buffer.result()
         if truncated {
             return CommandResult(code: -1, output: output,
-                                 launchError: "Die Archivliste oder Ausgabe ist zu groß (über 32 MB).")
+                                 launchError: T("engine.output_large"))
         }
         return CommandResult(code: process.terminationStatus, output: output, launchError: nil)
     }
@@ -222,7 +227,7 @@ final class ArchiveEngine {
         try? FileManager.default.removeItem(at: directory)
     }
 
-    private func unsafeListingReason(_ text: String) -> String? {
+    private func unsafeListingReason(_ text: String) -> LocalizedMessage? {
         let lines = text.components(separatedBy: .newlines)
         for line in lines {
             guard let separator = line.range(of: " = ") else { continue }
@@ -230,28 +235,28 @@ final class ArchiveEngine {
             let value = String(line[separator.upperBound...])
             let lower = value.lowercased()
             if key.contains("symbolic link") || key.contains("hard link") || key == "copy link" || key == "link" {
-                if !value.isEmpty { return "Das Archiv enthält Links; diese werden aus Sicherheitsgründen nicht entpackt." }
+                if !value.isEmpty { return M("engine.links") }
             }
             if key == "attributes" || key == "mode" {
                 if value.range(of: "(^|\\s)l[rwxstST-]{9}", options: .regularExpression) != nil {
-                    return "Das Archiv enthält einen symbolischen Link."
+                    return M("engine.symlink")
                 }
                 if key == "mode", let octal = UInt32(value.trimmingCharacters(in: .whitespaces), radix: 8),
                    octal & 0o170000 == 0o120000 {
-                    return "Das Archiv enthält einen symbolischen Link."
+                    return M("engine.symlink")
                 }
             }
             if key == "characteristics" && (lower.contains("symlink") || lower.contains("symboliclink") || lower.contains("hardlink")) {
-                return "Das Archiv enthält Links."
+                return M("engine.links")
             }
             guard key == "path" else { continue }
             if value.isEmpty || value.hasPrefix("/") || value.hasPrefix("\\")
                 || value.range(of: "^[A-Za-z]:", options: .regularExpression) != nil {
-                return "Das Archiv enthält einen absoluten oder ungültigen Dateipfad."
+                return M("engine.invalid_path")
             }
             let parts = value.replacingOccurrences(of: "\\", with: "/").components(separatedBy: "/")
             if parts.contains("..") || value.unicodeScalars.contains(where: { $0.value == 0 }) {
-                return "Das Archiv enthält einen Pfad außerhalb seines Zielordners."
+                return M("engine.path_escape")
             }
         }
         return nil
@@ -263,7 +268,7 @@ final class ArchiveEngine {
             at: directory, includingPropertiesForKeys: [.isSymbolicLinkKey], options: [],
             errorHandler: { _, error in enumerationError = error; return false }) else {
             throw NSError(domain: "ArchivBatch", code: 1,
-                          userInfo: [NSLocalizedDescriptionKey: "Der entpackte Ordner konnte nicht geprüft werden."])
+                          userInfo: [NSLocalizedDescriptionKey: T("engine.inspect_failed")])
         }
         let prefix = directory.standardizedFileURL.path + "/"
         for case let file as URL in enumerator {
@@ -271,18 +276,18 @@ final class ArchiveEngine {
             let values = try file.resourceValues(forKeys: [.isSymbolicLinkKey])
             if values.isSymbolicLink == true || !file.standardizedFileURL.path.hasPrefix(prefix) {
                 throw NSError(domain: "ArchivBatch", code: 2,
-                              userInfo: [NSLocalizedDescriptionKey: "Das entpackte Archiv enthält einen unsicheren Link oder Pfad."])
+                              userInfo: [NSLocalizedDescriptionKey: T("engine.unsafe_path")])
             }
             let attributes = try FileManager.default.attributesOfItem(atPath: file.path)
             if let type = attributes[.type] as? FileAttributeType,
                type != .typeRegular && type != .typeDirectory {
                 throw NSError(domain: "ArchivBatch", code: 3,
-                              userInfo: [NSLocalizedDescriptionKey: "Das Archiv enthält eine nicht unterstützte Spezialdatei."])
+                              userInfo: [NSLocalizedDescriptionKey: T("engine.special_file")])
             }
             if let count = attributes[.referenceCount] as? NSNumber, count.intValue > 1,
                attributes[.type] as? FileAttributeType == .typeRegular {
                 throw NSError(domain: "ArchivBatch", code: 4,
-                              userInfo: [NSLocalizedDescriptionKey: "Das entpackte Archiv enthält einen Hardlink."])
+                              userInfo: [NSLocalizedDescriptionKey: T("engine.hardlink")])
             }
         }
         if let error = enumerationError { throw error }
@@ -294,14 +299,14 @@ final class ArchiveEngine {
         let fileManager = FileManager.default
         let archive = archive.standardizedFileURL
         guard fileManager.isReadableFile(atPath: archive.path) else {
-            return .failure("Das Archiv ist nicht lesbar oder existiert nicht mehr.")
+            return .failure(M("engine.not_readable"))
         }
         var isDirectory: ObjCBool = false
         if fileManager.fileExists(atPath: archive.path, isDirectory: &isDirectory), isDirectory.boolValue {
-            return .failure("Bitte eine Archivdatei auswählen, keinen Ordner.")
+            return .failure(M("engine.select_file"))
         }
         if passwords.contains(where: { $0.unicodeScalars.contains(where: { $0.value == 0 }) }) {
-            return .failure("Ein Passwort enthält ein nicht unterstütztes Nullzeichen.")
+            return .failure(M("engine.null_password"))
         }
 
         var lastResult = CommandResult(code: 2, output: "", launchError: nil)
@@ -311,7 +316,7 @@ final class ArchiveEngine {
         for (index, password) in candidates {
             if isCancelled { return .cancelled }
             event(.attempt(index))
-            event(.progress(index == nil ? "Prüfe Archiv ohne Passwort …" : "Prüfe Passwort \((index ?? 0) + 1) von \(passwords.count) …"))
+            event(.progress(.testing, index.map { M("attempt.password", $0 + 1, passwords.count) } ?? M("attempt.no_password")))
             let result = run(arguments(command: "t", archive: archive, password: password))
             if isCancelled { return .cancelled }
             lastResult = result
@@ -322,22 +327,24 @@ final class ArchiveEngine {
             }
             if definiteFailure(result) {
                 let detail = diagnostic(result, passwords: passwords)
-                return .failure(detail.isEmpty ? "Das Archiv konnte nicht geprüft werden (Fehler \(result.code))." : detail)
+                return .failure(detail.isEmpty ? M("engine.test_failed", Int(result.code))
+                    : M("engine.with_details", M("engine.test_failed", Int(result.code)), detail))
             }
         }
         guard let password = acceptedPassword else {
             let detail = diagnostic(lastResult, passwords: passwords)
-            return .noMatch("Kein passendes Passwort gefunden; bei verschlüsselten Daten kann auch ein beschädigtes Archiv die Ursache sein."
-                            + (detail.isEmpty ? "" : "\n" + detail))
+            return .noMatch(detail.isEmpty ? M("engine.no_match")
+                : M("engine.with_details", M("engine.no_match"), detail))
         }
 
-        event(.progress("Prüfe Dateipfade …"))
+        event(.progress(.testing, M("engine.check_paths")))
         let listing = run(arguments(command: "l", archive: archive, password: password,
                                     extra: ["-slt", "-ba"]))
         if isCancelled { return .cancelled }
         guard listing.code == 0 && listing.launchError == nil else {
             let detail = diagnostic(listing, passwords: passwords)
-            return .failure(detail.isEmpty ? "Der Inhalt des Archivs konnte nicht sicher geprüft werden." : detail)
+            return .failure(detail.isEmpty ? M("engine.list_failed")
+                : M("engine.with_details", M("engine.list_failed"), detail))
         }
         if let reason = unsafeListingReason(listing.output) { return .failure(reason) }
 
@@ -352,24 +359,25 @@ final class ArchiveEngine {
             var rootIsDirectory: ObjCBool = false
             guard fileManager.fileExists(atPath: root.path, isDirectory: &rootIsDirectory), rootIsDirectory.boolValue,
                   fileManager.isWritableFile(atPath: root.path) else {
-                return .failure("Der Zielordner ist nicht beschreibbar.")
+                return .failure(M("engine.not_writable"))
             }
             let temporary = root.appendingPathComponent(".ArchivBatch-" + UUID().uuidString, isDirectory: true)
             try fileManager.createDirectory(at: temporary, withIntermediateDirectories: false)
             staging = temporary
             if isCancelled { return .cancelled }
-            event(.progress(acceptedIndex == nil ? "Entpacke …" : "Passwort passt. Entpacke …"))
+            event(.progress(.extracting, acceptedIndex == nil ? M("engine.extracting") : M("engine.password_match")))
             let extraction = run(arguments(command: "x", archive: archive, password: password,
                                             extra: ["-aou", "-y", "-snl-", "-snh-", "-o" + temporary.path]))
             if isCancelled { return .cancelled }
             guard extraction.code == 0 && extraction.launchError == nil else {
                 let detail = diagnostic(extraction, passwords: passwords)
-                return .failure(detail.isEmpty ? "Entpacken fehlgeschlagen (Fehler \(extraction.code))." : detail)
+                return .failure(detail.isEmpty ? M("engine.extract_failed", Int(extraction.code))
+                    : M("engine.with_details", M("engine.extract_failed", Int(extraction.code)), detail))
             }
             try validateExtractedTree(temporary)
             if isCancelled { return .cancelled }
             var name = archive.deletingPathExtension().lastPathComponent
-            if name.isEmpty || name == "." || name == ".." { name = "Archiv" }
+            if name.isEmpty || name == "." || name == ".." { name = T("engine.archive_name") }
             // Never merge into an existing directory or overwrite an existing file.
             for suffix in 1...10000 {
                 if isCancelled { return .cancelled }
@@ -386,10 +394,10 @@ final class ArchiveEngine {
                     throw error
                 }
             }
-            return .failure("Es konnte kein freier Name für den Ausgabeordner gefunden werden.")
+            return .failure(M("engine.no_output_name"))
         } catch {
             let result = CommandResult(code: -1, output: "", launchError: error.localizedDescription)
-            return .failure(diagnostic(result, passwords: passwords))
+            return .failure(M("engine.operation_failed", diagnostic(result, passwords: passwords)))
         }
     }
 }

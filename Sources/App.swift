@@ -9,8 +9,8 @@ struct PasswordItem: Identifiable {
 }
 
 enum ArchiveState: String {
-    case queued = "Bereit", testing = "Prüft", extracting = "Entpacken", done = "Fertig"
-    case unmatched = "Kein Treffer", failed = "Fehler", cancelled = "Gestoppt"
+    case queued, testing, extracting, done, unmatched, failed, cancelled
+    var title: String { T("status." + rawValue) }
     var color: Color {
         switch self {
         case .done: return .green
@@ -36,7 +36,7 @@ struct ArchiveItem: Identifiable {
     let url: URL
     var destination: URL?
     var state: ArchiveState = .queued
-    var detail = "Wartet auf Start"
+    var detail = M("queue.waiting")
     var output: URL?
     var matchedPassword: String?
 }
@@ -52,7 +52,7 @@ final class BatchModel: ObservableObject {
         }
     }
     @Published var passwordListURL: URL?
-    @Published var passwordStorageMessage = "Noch kein Speicherort gewählt"
+    @Published var passwordStorageMessage = M("store.none")
     @Published var passwordStorageFailed = false
     private(set) var hasUnsavedPasswords = false
     @Published var passwordInput = ""
@@ -64,8 +64,8 @@ final class BatchModel: ObservableObject {
     @Published var activeArchiveID: UUID?
     @Published var completed = 0
     @Published var total = 0
-    @Published var message = "Archive ablegen und mögliche Passwörter hinzufügen."
-    @Published var alertMessage: String?
+    @Published var message = M("queue.intro")
+    @Published var alertMessage: LocalizedMessage?
     private let passwordStorage: PasswordListStorage
     private var passwordFileLoaded = false
     private var passwordFileNeedsReload = false
@@ -77,7 +77,7 @@ final class BatchModel: ObservableObject {
     init(passwordStorage: PasswordListStorage = PasswordListStorage()) {
         self.passwordStorage = passwordStorage
         self.passwordListURL = passwordStorage.rememberedURL
-        if passwordListURL != nil { passwordStorageMessage = "Noch nicht geladen" }
+        if passwordListURL != nil { passwordStorageMessage = M("store.not_loaded") }
     }
 
     var canStart: Bool { !running && destination != nil && archives.contains { $0.state != .done } }
@@ -92,9 +92,9 @@ final class BatchModel: ObservableObject {
     func chooseDestination(for id: UUID? = nil) {
         guard !running else { return }
         let panel = NSOpenPanel()
-        panel.title = id == nil ? "Zielordner für die Archive wählen" : "Eigenen Zielordner wählen"
-        panel.message = "Jedes Archiv wird in einen eigenen Unterordner entpackt."
-        panel.prompt = "Ziel wählen"
+        panel.title = id == nil ? T("output.choose_title") : T("output.custom_title")
+        panel.message = T("output.panel_message")
+        panel.prompt = T("output.choose")
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
@@ -111,8 +111,8 @@ final class BatchModel: ObservableObject {
     func addFromPanel() {
         guard !running else { return }
         let panel = NSOpenPanel()
-        panel.title = "Archive hinzufügen"
-        panel.prompt = "Hinzufügen"
+        panel.title = T("archives.add_title")
+        panel.prompt = T("archives.add")
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = true
@@ -154,8 +154,8 @@ final class BatchModel: ObservableObject {
             archives.append(ArchiveItem(url: url))
             added += 1
         }
-        message = "\(added) Archiv\(added == 1 ? "" : "e") hinzugefügt."
-        if rejected > 0 { message += " \(rejected) Ordner oder ungültige Dateien ausgelassen." }
+        message = M("queue.added", added)
+        if rejected > 0 { message = M("engine.with_details", message, M("queue.rejected", rejected)) }
     }
 
     private func choosePasswordLocationAtStartup() {
@@ -163,16 +163,16 @@ final class BatchModel: ObservableObject {
         do { try restorePasswordList() }
         catch {
             passwordStorageFailed = true
-            passwordStorageMessage = "Nicht geladen: " + error.localizedDescription
+            passwordStorageMessage = M("store.load_failed", error)
         }
         let alert = NSAlert()
-        alert.messageText = "Speicherort der Passwortliste"
+        alert.messageText = T("store.startup_title")
         alert.informativeText = url.path + "\n\n" + (passwordFileLoaded
-            ? "\(passwords.count) Passwörter geladen. Änderungen werden hier automatisch gespeichert."
-            : "Die Liste konnte nicht geladen werden. Verbinde das Volume oder wähle einen anderen Speicherort.\n" + passwordStorageMessage)
-        alert.addButton(withTitle: passwordFileLoaded ? "Verwenden" : "Erneut laden")
-        alert.addButton(withTitle: "Speicherort ändern …")
-        alert.addButton(withTitle: "Später")
+            ? T("store.startup_loaded", passwords.count)
+            : T("store.startup_failed", passwordStorageMessage))
+        alert.addButton(withTitle: passwordFileLoaded ? T("store.use") : T("store.reload"))
+        alert.addButton(withTitle: T("store.change"))
+        alert.addButton(withTitle: T("store.later"))
         let response = alert.runModal()
         if response == .alertSecondButtonReturn { choosePasswordLocation() }
         else if response == .alertFirstButtonReturn, !passwordFileLoaded { retryPasswordStorage() }
@@ -181,18 +181,18 @@ final class BatchModel: ObservableObject {
     func choosePasswordLocation() {
         guard !running else { return }
         let panel = NSSavePanel()
-        panel.title = "Passwortliste speichern"
-        panel.message = "Wähle eine Textdatei auf dem gewünschten Volume. Aktuelle und dort bereits vorhandene Passwörter werden zusammengeführt. Die Liste wird als Klartext gespeichert."
-        panel.prompt = "Verwenden"
+        panel.title = T("store.save_title")
+        panel.message = T("store.save_message")
+        panel.prompt = T("store.use")
         panel.allowedContentTypes = [.plainText]
         panel.canCreateDirectories = true
-        panel.nameFieldStringValue = passwordListURL?.lastPathComponent ?? "ArchivBatch-Passwoerter.txt"
+        panel.nameFieldStringValue = passwordListURL?.lastPathComponent ?? "ArchivBatch-Passwords.txt"
         if let url = passwordListURL, FileManager.default.fileExists(atPath: url.deletingLastPathComponent().path) {
             panel.directoryURL = url.deletingLastPathComponent()
         }
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do { try usePasswordList(at: url) }
-        catch { alertMessage = "Die Passwortliste konnte an diesem Ort nicht verwendet werden: " + error.localizedDescription }
+        catch { alertMessage = M("store.use_failed", error) }
     }
 
     /// Switching stores is transactional: read and save the merged list before adopting the path.
@@ -208,8 +208,8 @@ final class BatchModel: ObservableObject {
         replacePasswordValues(values)
         passwordStorageFailed = false
         hasUnsavedPasswords = false
-        passwordStorageMessage = "Automatisch gespeichert · \(passwords.count) Passwörter"
-        message = "Passwortliste gespeichert: " + url.lastPathComponent
+        passwordStorageMessage = M("store.saved", passwords.count)
+        message = M("store.saved_file", url.lastPathComponent)
     }
 
     func restorePasswordList() throws {
@@ -220,9 +220,9 @@ final class BatchModel: ObservableObject {
         passwordFileLoaded = true
         passwordFileNeedsReload = false
         passwordStorageFailed = false
-        hasUnsavedPasswords = values.map { Data($0.utf8) } != passwords.map { Data($0.value.utf8) }
-        passwordStorageMessage = "Geladen · \(passwords.count) Passwörter"
-        if values.map { Data($0.utf8) } != passwords.map { Data($0.value.utf8) } { persistPasswordList() }
+        hasUnsavedPasswords = values.map({ Data($0.utf8) }) != passwords.map({ Data($0.value.utf8) })
+        passwordStorageMessage = M("store.loaded", passwords.count)
+        if values.map({ Data($0.utf8) }) != passwords.map({ Data($0.value.utf8) }) { persistPasswordList() }
     }
 
     private func replacePasswordValues(_ values: [String]) {
@@ -240,23 +240,23 @@ final class BatchModel: ObservableObject {
     func persistPasswordList() {
         hasUnsavedPasswords = true
         guard let url = passwordListURL else {
-            passwordStorageMessage = "Noch nicht gespeichert – Speicherort wählen"
+            passwordStorageMessage = M("store.unsaved_no_location")
             return
         }
         guard passwordFileLoaded else {
             passwordStorageFailed = true
-            passwordStorageMessage = "Nicht gespeichert – gespeicherte Liste zuerst laden"
+            passwordStorageMessage = M("store.must_load")
             return
         }
         do {
             try passwordStorage.save(passwords.map(\.value), to: url)
             passwordStorageFailed = false
             hasUnsavedPasswords = false
-            passwordStorageMessage = "Automatisch gespeichert · \(passwords.count) Passwörter"
+            passwordStorageMessage = M("store.saved", passwords.count)
         } catch {
             passwordStorageFailed = true
             if case PasswordStorageError.externalChange = error { passwordFileNeedsReload = true }
-            passwordStorageMessage = "Nicht gespeichert: " + error.localizedDescription
+            passwordStorageMessage = M("store.save_failed", error)
         }
     }
 
@@ -267,7 +267,7 @@ final class BatchModel: ObservableObject {
             do { try restorePasswordList() }
             catch {
                 passwordStorageFailed = true
-                passwordStorageMessage = "Nicht geladen: " + error.localizedDescription
+                passwordStorageMessage = M("store.load_failed", error)
             }
         }
     }
@@ -277,7 +277,7 @@ final class BatchModel: ObservableObject {
         let value = passwordInput
         passwordInput = ""
         let count = addPasswordLines(value)
-        if count > 0 { message = "\(count) Passwort\(count == 1 ? "" : "er") hinzugefügt." }
+        if count > 0 { message = M("passwords.added", count) }
     }
 
     @discardableResult
@@ -301,22 +301,22 @@ final class BatchModel: ObservableObject {
     @discardableResult
     func importPasswordFile(_ url: URL) throws -> Int {
         let count = addPasswordValues(try PasswordText.importCandidates(from: url))
-        message = "\(count) neue Passwörter aus \(url.lastPathComponent) eingelesen. Duplikate ausgelassen."
+        message = M("import.complete", count, url.lastPathComponent)
         return count
     }
 
     func importPasswords() {
         guard !running else { return }
         let panel = NSOpenPanel()
-        panel.title = "Passwörter aus Text importieren"
-        panel.message = "Jede durch Leerzeichen, Tabulatoren oder Absätze getrennte Zeichenfolge wird ein Passwort. Formatierungen werden ignoriert."
-        panel.prompt = "Einlesen"
+        panel.title = T("import.title")
+        panel.message = T("import.message")
+        panel.prompt = T("import.confirm")
         panel.allowedContentTypes = [.plainText, .rtf, .rtfd]
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do { try importPasswordFile(url) }
-        catch { alertMessage = "Die Textdatei konnte nicht gelesen werden: \(error.localizedDescription)" }
+        catch { alertMessage = M("import.failed", error) }
     }
 
     func removeArchive(_ id: UUID) { if !running { archives.removeAll { $0.id == id } } }
@@ -331,14 +331,14 @@ final class BatchModel: ObservableObject {
         if !passwordInput.isEmpty { addPassword() }
         guard let executable = Bundle.main.url(forResource: "7zz", withExtension: nil),
               FileManager.default.isExecutableFile(atPath: executable.path) else {
-            alertMessage = "Der mitgelieferte Entpacker fehlt. Bitte die App neu erstellen."
+            alertMessage = M("engine.missing")
             return
         }
         let candidates = passwords
         let pending = archives.filter { $0.state != .done }
         for index in archives.indices where archives[index].state != .done {
             archives[index].state = .queued
-            archives[index].detail = "Wartet auf Start"
+            archives[index].detail = M("queue.waiting")
             archives[index].output = nil
             archives[index].matchedPassword = nil
         }
@@ -348,12 +348,12 @@ final class BatchModel: ObservableObject {
         total = pending.count
         running = true
         stopping = false
-        message = "Batch gestartet."
+        message = M("queue.started")
         ProcessInfo.processInfo.disableSuddenTermination()
-        ProcessInfo.processInfo.disableAutomaticTermination("Archive werden entpackt")
+        ProcessInfo.processInfo.disableAutomaticTermination("Extracting archives")
         worker.async { [weak self] in
             guard let self else { return }
-            let activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .idleSystemSleepDisabled], reason: "Archive entpacken")
+            let activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .idleSystemSleepDisabled], reason: "Extracting archives")
             defer { ProcessInfo.processInfo.endActivity(activity) }
             for item in pending {
                 var shouldStop = false
@@ -361,7 +361,7 @@ final class BatchModel: ObservableObject {
                     shouldStop = self.stopping
                     if !shouldStop {
                         self.activeArchiveID = item.id
-                        self.update(item.id, state: .testing, detail: "Ohne Passwort prüfen …")
+                        self.update(item.id, state: .testing, detail: M("attempt.no_password"))
                     }
                 }
                 if shouldStop { break }
@@ -371,11 +371,10 @@ final class BatchModel: ObservableObject {
                         switch event {
                         case .attempt(let index):
                             self.activePasswordID = index.map { candidates[$0].id }
-                            let detail = index.map { "Passwort \($0 + 1) von \(candidates.count)" } ?? "Ohne Passwort prüfen …"
+                            let detail = index.map { M("attempt.password", $0 + 1, candidates.count) } ?? M("attempt.no_password")
                             self.update(item.id, state: .testing, detail: detail)
-                        case .progress(let text):
-                            let state: ArchiveState = text.hasPrefix("Prüfe Passwort") || text.hasPrefix("Prüfe Archiv") ? .testing : .extracting
-                            self.update(item.id, state: state, detail: text)
+                        case .progress(let phase, let text):
+                            self.update(item.id, state: phase == .testing ? .testing : .extracting, detail: text)
                         }
                     }
                 }
@@ -385,7 +384,7 @@ final class BatchModel: ObservableObject {
                     switch outcome {
                     case .success(let url, let match):
                         self.archives[index].state = .done
-                        self.archives[index].detail = match.map { "Entpackt mit Passwort \($0 + 1)" } ?? "Entpackt ohne Passwort"
+                        self.archives[index].detail = match.map { M("attempt.extracted_with", $0 + 1) } ?? M("attempt.extracted_without")
                         self.archives[index].output = url
                         if let match {
                             self.archives[index].matchedPassword = candidates[match].value
@@ -404,7 +403,7 @@ final class BatchModel: ObservableObject {
                         self.completed += 1
                     case .cancelled:
                         self.archives[index].state = .cancelled
-                        self.archives[index].detail = "Verarbeitung gestoppt"
+                        self.archives[index].detail = M("queue.cancelled")
                         self.stopping = true
                     }
                 }
@@ -412,23 +411,23 @@ final class BatchModel: ObservableObject {
             DispatchQueue.main.async {
                 for index in self.archives.indices where self.stopping && self.archives[index].state == .queued {
                     self.archives[index].state = .cancelled
-                    self.archives[index].detail = "Noch nicht verarbeitet"
+                    self.archives[index].detail = M("queue.not_processed")
                 }
                 let finished = self.archives.filter { $0.state == .done }.count
                 let unsuccessful = self.archives.filter { $0.state == .unmatched || $0.state == .failed }.count
-                self.message = self.stopping ? "Gestoppt. Mit Start kannst du fortsetzen." : "Batch fertig: \(finished) entpackt, \(unsuccessful) ohne Erfolg."
+                self.message = self.stopping ? M("queue.stopped") : M("queue.finished", finished, unsuccessful)
                 self.activeArchiveID = nil
                 self.activePasswordID = nil
                 self.running = false
                 self.stopping = false
                 self.engine = nil
                 ProcessInfo.processInfo.enableSuddenTermination()
-                ProcessInfo.processInfo.enableAutomaticTermination("Archive werden entpackt")
+                ProcessInfo.processInfo.enableAutomaticTermination("Extracting archives")
             }
         }
     }
 
-    private func update(_ id: UUID, state: ArchiveState, detail: String) {
+    private func update(_ id: UUID, state: ArchiveState, detail: LocalizedMessage) {
         if let index = archives.firstIndex(where: { $0.id == id }) {
             archives[index].state = state
             archives[index].detail = detail
@@ -438,13 +437,14 @@ final class BatchModel: ObservableObject {
     func stop() {
         guard running else { return }
         stopping = true
-        message = "Wird gestoppt …"
+        message = M("queue.stopping")
         engine?.cancel()
     }
 }
 
 struct ContentView: View {
     @ObservedObject var model = BatchModel.shared
+    @ObservedObject var localization = AppLocalization.shared
     @FocusState private var passwordFocused: Bool
     private var alertPresented: Binding<Bool> {
         Binding(get: { model.alertMessage != nil }, set: { if !$0 { model.alertMessage = nil } })
@@ -457,17 +457,19 @@ struct ContentView: View {
             HStack(alignment: .top, spacing: 20) {
                 archivePane
                 Divider()
-                passwordPane.frame(width: 310)
+                passwordPane.frame(width: 330)
             }
             .padding(20)
             Divider()
             footer
         }
-        .frame(minWidth: 960, minHeight: 610)
+        .frame(minWidth: 1000, minHeight: 650)
+        .environment(\.locale, localization.language.locale)
+        .environment(\.layoutDirection, localization.language.isRightToLeft ? .rightToLeft : .leftToRight)
         .background(Color(NSColor.windowBackgroundColor))
         .alert("ArchivBatch", isPresented: alertPresented) {
-            Button("OK", role: .cancel) { model.alertMessage = nil }
-        } message: { Text(model.alertMessage ?? "") }
+            Button(T("controls.ok"), role: .cancel) { model.alertMessage = nil }
+        } message: { Text(model.alertMessage?.rendered() ?? "") }
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { model.chooseInitialDestination() }
         }
@@ -478,32 +480,51 @@ struct ContentView: View {
             Image(systemName: "archivebox.fill").font(.system(size: 28)).foregroundColor(.accentColor)
             VStack(alignment: .leading, spacing: 3) {
                 Text("ArchivBatch").font(.system(size: 24, weight: .semibold))
-                Text("Archive öffnen. Passwörter durchprobieren. Automatisch entpacken.")
-                    .font(.subheadline).foregroundColor(.secondary)
+                Text(T("app.tagline"))
+                    .font(.subheadline).foregroundColor(.secondary).lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer(minLength: 20)
+            Spacer(minLength: 12)
+            languageMenu
             VStack(alignment: .trailing, spacing: 4) {
-                Text("STANDARDZIEL").font(.system(size: 10, weight: .semibold)).foregroundColor(.secondary)
+                Text(T("output.standard_label")).font(.system(size: 10, weight: .semibold)).foregroundColor(.secondary)
                 HStack(spacing: 8) {
-                    Text(model.destination?.lastPathComponent ?? "Noch kein Ziel gewählt")
-                        .lineLimit(1).help(model.destination?.path ?? "Zielordner wählen")
-                    Button("Ändern …") { model.chooseDestination() }.disabled(model.running)
+                    Text(model.destination?.lastPathComponent ?? T("output.none"))
+                        .lineLimit(1).help(model.destination?.path ?? T("output.choose_folder"))
+                    Button(T("output.change")) { model.chooseDestination() }.disabled(model.running)
                 }
-            }.frame(maxWidth: 300)
+            }.frame(maxWidth: 260)
         }.padding(20)
+    }
+
+    private var languageMenu: some View {
+        Menu {
+            ForEach(AppLanguage.allCases) { language in
+                Button { localization.select(language) } label: {
+                    if localization.language == language {
+                        Label(language.nativeName, systemImage: "checkmark")
+                    } else { Text(verbatim: language.nativeName) }
+                }
+            }
+            Divider()
+            Text(T("language.system_note"))
+        } label: { Label(T("language.title"), systemImage: "globe") }
+        .disabled(model.running)
+        .help(localization.language.nativeName + " — " + T("language.change_hint"))
+        .fixedSize()
     }
 
     private var archivePane: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Archive").font(.headline)
+                Text(T("archives.title")).font(.headline)
                 Text("\(model.archives.count)").foregroundColor(.secondary)
                 Spacer()
-                Button { model.addFromPanel() } label: { Label("Hinzufügen", systemImage: "plus") }
+                Button { model.addFromPanel() } label: { Label(T("archives.add"), systemImage: "plus") }
                     .disabled(model.running)
                 Menu {
-                    Button("Fertige entfernen") { model.clearFinished() }
-                    Button("Liste leeren") { model.archives.removeAll() }
+                    Button(T("archives.clear_done")) { model.clearFinished() }
+                    Button(T("archives.clear")) { model.archives.removeAll() }
                 } label: { Image(systemName: "ellipsis.circle") }.disabled(model.running)
             }
             ZStack {
@@ -513,10 +534,10 @@ struct ContentView: View {
                     VStack(spacing: 12) {
                         Image(systemName: "square.and.arrow.down").font(.system(size: 42, weight: .light))
                             .foregroundColor(model.dropTargeted ? .accentColor : .secondary)
-                        Text("Archive aus dem Finder hier ablegen").font(.headline)
-                        Text("Eine Datei oder mehrere gleichzeitig\n7z · RAR · ZIP · TAR · und weitere")
+                        Text(T("archives.drop")).font(.headline)
+                        Text(T("archives.drop_hint"))
                             .font(.subheadline).foregroundColor(.secondary).multilineTextAlignment(.center)
-                        Button("Dateien auswählen …") { model.addFromPanel() }
+                        Button(T("archives.choose")) { model.addFromPanel() }
                     }.padding(24)
                 } else {
                     ScrollView {
@@ -534,7 +555,7 @@ struct ContentView: View {
                     .allowsHitTesting(false)
             }
             .onDrop(of: [UTType.fileURL], isTargeted: $model.dropTargeted, perform: acceptDrop)
-            Text("Für mehrteilige Archive die erste Datei ablegen; weitere Teile bleiben daneben im Finder.")
+            Text(T("archives.multipart"))
                 .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -545,50 +566,50 @@ struct ContentView: View {
                 .foregroundColor(item.state.color).frame(width: 24).padding(.top, 2)
             VStack(alignment: .leading, spacing: 5) {
                 HStack {
-                    Text(item.url.lastPathComponent).fontWeight(.medium).lineLimit(1).help(item.url.path)
+                    Text(verbatim: item.url.lastPathComponent).fontWeight(.medium).environment(\.layoutDirection, .leftToRight).lineLimit(1).help(item.url.path)
                     Spacer()
-                    Text(item.state.rawValue).font(.caption).fontWeight(.semibold)
+                    Text(item.state.title).font(.caption).fontWeight(.semibold)
                         .foregroundColor(item.state.color)
                         .padding(.horizontal, 7).padding(.vertical, 3)
                         .background(item.state.color.opacity(0.09)).cornerRadius(4)
                 }
-                Text(item.detail).font(.caption).foregroundColor(.secondary)
+                Text(item.detail.rendered()).font(.caption).foregroundColor(.secondary)
                     .lineLimit(3).textSelection(.enabled)
                 HStack(spacing: 8) {
                     Button { model.chooseDestination(for: item.id) } label: {
-                        Label(item.destination?.lastPathComponent ?? "Standardziel", systemImage: "folder")
+                        Label(item.destination?.lastPathComponent ?? T("output.standard"), systemImage: "folder")
                             .font(.caption).lineLimit(1)
                     }.buttonStyle(.borderless).disabled(model.running)
-                        .help(item.destination?.path ?? model.destination?.path ?? "Ziel wählen")
+                        .help(item.destination?.path ?? model.destination?.path ?? T("output.choose"))
                     if item.destination != nil {
                         Button { model.resetDestination(item.id) } label: { Image(systemName: "arrow.uturn.backward").font(.caption) }
-                            .buttonStyle(.borderless).disabled(model.running).help("Standardziel verwenden")
+                            .buttonStyle(.borderless).disabled(model.running).help(T("output.reset"))
                     }
                     Spacer()
                     if let output = item.output {
-                        Button("Im Finder") { NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: output.path) }
+                        Button(T("archives.reveal_output")) { NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: output.path) }
                             .font(.caption).buttonStyle(.borderless)
                     }
                     Button { model.removeArchive(item.id) } label: { Image(systemName: "xmark").font(.caption) }
                         .buttonStyle(.borderless).foregroundColor(.secondary).disabled(model.running)
-                        .help("Aus der Batchliste entfernen")
+                        .help(T("archives.remove"))
                 }
             }
         }
         .padding(12)
         .background(model.activeArchiveID == item.id ? Color.accentColor.opacity(0.045) : Color.clear)
         .contextMenu {
-            Button("Quelle im Finder zeigen") { NSWorkspace.shared.activateFileViewerSelecting([item.url]) }
-            if let output = item.output { Button("Entpackten Ordner öffnen") { NSWorkspace.shared.open(output) } }
+            Button(T("archives.reveal_source")) { NSWorkspace.shared.activateFileViewerSelecting([item.url]) }
+            if let output = item.output { Button(T("output.open")) { NSWorkspace.shared.open(output) } }
             if let password = item.matchedPassword {
-                Button("Passendes Passwort kopieren") {
+                Button(T("passwords.copy_match")) {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(password, forType: .string)
                 }
             }
             if !model.running {
-                Button("Eigenes Ziel wählen …") { model.chooseDestination(for: item.id) }
-                Button("Entfernen") { model.removeArchive(item.id) }
+                Button(T("output.custom")) { model.chooseDestination(for: item.id) }
+                Button(T("archives.remove_short")) { model.removeArchive(item.id) }
             }
         }
     }
@@ -596,26 +617,26 @@ struct ContentView: View {
     private var passwordPane: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Passwörter").font(.headline)
+                Text(T("passwords.title")).font(.headline)
                 Text("\(model.passwords.count)").foregroundColor(.secondary)
                 Spacer()
-                Button("Text importieren …") { model.importPasswords() }.disabled(model.running)
+                Button(T("import.button")) { model.importPasswords() }.disabled(model.running)
             }
             HStack(spacing: 6) {
-                TextField("Passwort eingeben + Enter", text: $model.passwordInput)
-                    .textFieldStyle(.roundedBorder).focused($passwordFocused)
+                TextField(T("passwords.entry"), text: $model.passwordInput)
+                    .textFieldStyle(.roundedBorder).environment(\.layoutDirection, .leftToRight).focused($passwordFocused)
                     .onSubmit { model.addPassword(); passwordFocused = true }
                     .disabled(model.running)
                 Button { model.addPassword(); passwordFocused = true } label: { Image(systemName: "plus") }
-                    .disabled(model.running || model.passwordInput.isEmpty).help("Passwort hinzufügen")
+                    .disabled(model.running || model.passwordInput.isEmpty).help(T("passwords.add"))
             }
             ZStack {
                 RoundedRectangle(cornerRadius: 10).fill(Color(NSColor.controlBackgroundColor))
                 if model.passwords.isEmpty {
                     VStack(spacing: 8) {
                         Image(systemName: "key").font(.system(size: 30, weight: .light)).foregroundColor(.secondary)
-                        Text("Eine Möglichkeit pro Zeile").font(.subheadline)
-                        Text("Enter fügt das Passwort hinzu.\nOder eine Textdatei importieren.")
+                        Text(T("passwords.empty")).font(.subheadline)
+                        Text(T("passwords.empty_hint"))
                             .font(.caption).foregroundColor(.secondary).multilineTextAlignment(.center)
                     }.padding()
                 } else {
@@ -638,30 +659,30 @@ struct ContentView: View {
             }
             HStack(spacing: 5) {
                 Circle().fill(Color.red).frame(width: 6, height: 6)
-                Text("Rot = wird gerade getestet").font(.caption).foregroundColor(.secondary)
+                Text(T("passwords.active_hint")).font(.caption).foregroundColor(.secondary)
                 Spacer()
-                Button("Leeren") { model.passwords.removeAll() }.font(.caption)
+                Button(T("passwords.clear")) { model.passwords.removeAll() }.font(.caption)
                     .disabled(model.running || model.passwords.isEmpty)
             }
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Label("Passwortdatei", systemImage: "externaldrive").font(.system(size: 11, weight: .semibold))
+                    Label(T("store.title"), systemImage: "externaldrive").font(.system(size: 11, weight: .semibold))
                     Spacer()
-                    Button("Speicherort …") { model.choosePasswordLocation() }
+                    Button(T("store.location")) { model.choosePasswordLocation() }
                         .font(.caption).disabled(model.running)
                 }
-                Text(model.passwordListURL?.path ?? "Noch kein Speicherort gewählt")
+                Text(model.passwordListURL?.path ?? T("store.none"))
                     .font(.caption).foregroundColor(.secondary).lineLimit(2)
-                    .textSelection(.enabled).help(model.passwordListURL?.path ?? "")
-                Text(model.passwordStorageMessage).font(.caption)
+                    .textSelection(.enabled).environment(\.layoutDirection, .leftToRight).help(model.passwordListURL?.path ?? "")
+                Text(model.passwordStorageMessage.rendered()).font(.caption)
                     .foregroundColor(model.passwordStorageFailed ? .orange : .secondary)
-                    .lineLimit(3).help(model.passwordStorageMessage)
+                    .lineLimit(3).help(model.passwordStorageMessage.rendered())
                 if model.passwordStorageFailed {
-                    Button("Erneut laden / speichern") { model.retryPasswordStorage() }
+                    Button(T("store.retry")) { model.retryPasswordStorage() }
                         .font(.caption).disabled(model.running)
                 }
             }
-            Text("Textimport: Leerzeichen, Tabs und Absätze trennen Passwörter.")
+            Text(T("import.hint"))
                 .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
         }.frame(maxHeight: .infinity)
     }
@@ -670,7 +691,7 @@ struct ContentView: View {
         let active = model.activePasswordID == item.id
         return HStack(spacing: 8) {
             Text("\(index + 1)").font(.caption).foregroundColor(active ? .red : .secondary).frame(width: 22)
-            Text(verbatim: item.value).font(.system(.body, design: .monospaced))
+            Text(verbatim: item.value).environment(\.layoutDirection, .leftToRight).font(.system(.body, design: .monospaced))
                 .foregroundColor(active ? .red : .primary).textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
             if active {
@@ -688,7 +709,7 @@ struct ContentView: View {
     private var footer: some View {
         HStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(model.message).font(.subheadline).lineLimit(2)
+                Text(model.message.rendered()).font(.subheadline).lineLimit(2)
                 if model.running {
                     HStack {
                         ProgressView(value: Double(model.completed), total: Double(max(1, model.total)))
@@ -696,15 +717,15 @@ struct ContentView: View {
                         Text("\(model.completed) / \(model.total)").font(.caption).foregroundColor(.secondary)
                     }
                 } else if model.destination == nil {
-                    Text("Zum Starten zuerst den Zielordner wählen.").font(.caption).foregroundColor(.secondary)
+                    Text(T("controls.choose_output_first")).font(.caption).foregroundColor(.secondary)
                 }
             }
             Spacer()
             if model.running {
-                Button(model.stopping ? "Stoppt …" : "Stopp") { model.stop() }
+                Button(model.stopping ? T("controls.stopping") : T("controls.stop")) { model.stop() }
                     .disabled(model.stopping).keyboardShortcut(".", modifiers: .command)
             } else {
-                Button { model.start() } label: { Label("Start", systemImage: "play.fill").padding(.horizontal, 16) }
+                Button { model.start() } label: { Label(T("controls.start"), systemImage: "play.fill").padding(.horizontal, 16) }
                     .buttonStyle(.borderedProminent).controlSize(.large)
                     .disabled(!model.canStart).keyboardShortcut(.return, modifiers: .command)
             }
@@ -755,10 +776,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard BatchModel.shared.running else { return confirmPasswordSaveBeforeQuitting() ? .terminateNow : .terminateCancel }
         let alert = NSAlert()
-        alert.messageText = "Laufende Verarbeitung stoppen und beenden?"
-        alert.informativeText = "Bereits entpackte Archive bleiben erhalten."
-        alert.addButton(withTitle: "Stoppen und beenden")
-        alert.addButton(withTitle: "Weiterarbeiten")
+        alert.messageText = T("quit.running_title")
+        alert.informativeText = T("quit.running_message")
+        alert.addButton(withTitle: T("quit.stop"))
+        alert.addButton(withTitle: T("quit.continue"))
         guard alert.runModal() == .alertFirstButtonReturn else { return .terminateCancel }
         BatchModel.shared.stop()
         waitUntilStopped(sender)
@@ -768,11 +789,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let model = BatchModel.shared
         guard model.hasUnsavedPasswords else { return true }
         let alert = NSAlert()
-        alert.messageText = "Die Passwortliste ist noch nicht gespeichert"
-        alert.informativeText = model.passwordStorageMessage + "\n\nWähle einen erreichbaren Speicherort, um die aktuelle Liste zu behalten."
-        alert.addButton(withTitle: "Speicherort wählen …")
-        alert.addButton(withTitle: "Ohne Speichern beenden")
-        alert.addButton(withTitle: "Abbrechen")
+        alert.messageText = T("quit.unsaved_title")
+        alert.informativeText = T("quit.unsaved_message", model.passwordStorageMessage)
+        alert.addButton(withTitle: T("quit.choose_location"))
+        alert.addButton(withTitle: T("quit.without_save"))
+        alert.addButton(withTitle: T("controls.cancel"))
         switch alert.runModal() {
         case .alertFirstButtonReturn:
             model.choosePasswordLocation()
@@ -790,25 +811,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-@main
 struct ArchivBatchApp: App {
+    @ObservedObject var model = BatchModel.shared
+    @ObservedObject var localization = AppLocalization.shared
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     var body: some Scene {
         WindowGroup("ArchivBatch") { ContentView() }
             .commands {
                 CommandGroup(replacing: .newItem) {
-                    Button("Archive hinzufügen …") { BatchModel.shared.addFromPanel() }
-                        .keyboardShortcut("o").disabled(BatchModel.shared.running)
+                    Button(T("archives.add_menu")) { BatchModel.shared.addFromPanel() }
+                        .keyboardShortcut("o").disabled(model.running)
                 }
                 CommandGroup(after: .importExport) {
-                    Button("Passwortliste einlesen …") { BatchModel.shared.importPasswords() }
-                        .keyboardShortcut("i").disabled(BatchModel.shared.running)
+                    Button(T("import.menu")) { BatchModel.shared.importPasswords() }
+                        .keyboardShortcut("i").disabled(model.running)
+                }
+                CommandMenu(T("language.title")) {
+                    ForEach(AppLanguage.allCases) { language in
+                        Button(language.nativeName) { localization.select(language) }
+                            .disabled(model.running)
+                    }
                 }
                 CommandGroup(replacing: .help) {
-                    Button("Kurzanleitung") {
+                    Button(T("help.title")) {
                         let alert = NSAlert()
                         alert.messageText = "ArchivBatch"
-                        alert.informativeText = "1. Zielordner wählen.\n2. Archive aus dem Finder ablegen.\n3. Passwörter mit Enter hinzufügen oder Text importieren.\n4. Start drücken.\n\nRot markiert das gerade geprüfte Passwort. Die Passwortliste wird automatisch in der gewählten Textdatei gespeichert; der Speicherort kann beim Start oder unter Passwortdatei geändert werden. Beim Textimport trennen Leerzeichen, Tabs und Absätze die Passwörter. Jedes Archiv erhält einen eigenen Unterordner. Kein Treffer kann auch ein beschädigtes Archiv bedeuten. Mehrteilige Archive: nur den ersten Teil hinzufügen; alle Teile müssen nebeneinander liegen."
+                        alert.informativeText = T("help.body")
                         alert.runModal()
                     }
                 }

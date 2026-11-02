@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>de</string>
+	<string>en</string>
 	<key>CFBundleDisplayName</key>
 	<string>ArchivBatch</string>
 	<key>CFBundleExecutable</key>
@@ -14,14 +14,26 @@
 	<string>local.archivbatch.app</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>de</string>
+		<string>fr</string>
+		<string>es</string>
+		<string>pt-BR</string>
+		<string>zh-Hans</string>
+		<string>ja</string>
+		<string>hi</string>
+		<string>ar</string>
+	</array>
 	<key>CFBundleName</key>
 	<string>ArchivBatch</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.1</string>
+	<string>1.2</string>
 	<key>CFBundleVersion</key>
-	<string>2</string>
+	<string>3</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>12.0</string>
 	<key>LSMinimumSystemVersionByArchitecture</key>

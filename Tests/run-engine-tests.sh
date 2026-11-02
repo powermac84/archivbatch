@@ -6,6 +6,6 @@ mkdir -p .build/ModuleCache Reports
 SDK_PATH="$(xcrun --sdk macosx --show-sdk-path)"
 xcrun swiftc -swift-version 5 -parse-as-library \
   -sdk "$SDK_PATH" -module-cache-path "$PROJECT_DIR/.build/ModuleCache" \
-  Sources/ArchiveEngine.swift Tests/EngineIntegrationTests.swift \
+  Sources/Localization.swift Sources/ArchiveEngine.swift Tests/EngineIntegrationTests.swift \
   -o .build/engine-integration-tests
 .build/engine-integration-tests

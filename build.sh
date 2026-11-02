@@ -15,7 +15,7 @@ APP_DIR="$PROJECT_DIR/dist/ArchivBatch.app"
 EXECUTABLE_DIR="$APP_DIR/Contents/MacOS"
 RESOURCE_DIR="$APP_DIR/Contents/Resources"
 
-for required_file in Vendor/7zz Vendor/License.txt Vendor/History.txt Vendor/readme.txt LICENSES/LGPL-2.1.txt Info.plist; do
+for required_file in Vendor/7zz Vendor/License.txt Vendor/History.txt Vendor/readme.txt LICENSES/LGPL-2.1.txt Info.plist Resources/Localization/en.json; do
   if [ ! -f "$required_file" ]; then
     printf 'Erforderliche Datei fehlt: %s\n' "$required_file" >&2
     exit 1
@@ -42,6 +42,7 @@ done
 /usr/bin/lipo -create \
   "$BUILD_DIR/ArchivBatch-arm64" "$BUILD_DIR/ArchivBatch-x86_64" \
   -output "$EXECUTABLE_DIR/ArchivBatch"
+/bin/cp -R Resources/Localization "$RESOURCE_DIR/"
 /bin/cp Info.plist "$APP_DIR/Contents/Info.plist"
 /bin/cp Vendor/7zz "$RESOURCE_DIR/7zz"
 /bin/cp Vendor/License.txt Vendor/History.txt Vendor/readme.txt "$RESOURCE_DIR/7-Zip/"

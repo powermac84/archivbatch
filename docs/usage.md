@@ -6,8 +6,8 @@ ArchivBatch works through archives with a list of possible passwords you provide
 
 1. Choose the file that will hold your password list. You can put it on your Mac or a mounted volume.
 2. Choose the default folder for extracted output.
-3. Drag archives from Finder into the archive pane, or click **Hinzufügen**.
-4. Add password candidates with Enter, or click **Text importieren …**.
+3. Drag archives from Finder into the archive pane, or click **Add**.
+4. Add password candidates with Return, or click **Import text…**.
 5. Optionally click the folder control in an archive's row to give it a different destination.
 6. Click **Start**.
 
@@ -15,23 +15,43 @@ ArchivBatch first checks whether the archive opens without a password. It then t
 
 For a multipart archive, add the **first part** and keep every remaining part next to it in Finder. Supported formats and encryption methods are determined by the bundled 7-Zip version.
 
+## Choosing a language
+
+ArchivBatch starts in **English**, regardless of your macOS language. Use the globe **Language** control in the window header or the **Language** menu in the menu bar to choose:
+
+| Language | Name shown in the menu |
+| --- | --- |
+| English | English |
+| German | Deutsch |
+| French | Français |
+| Spanish | Español |
+| Brazilian Portuguese | Português (Brasil) |
+| Simplified Chinese | 简体中文 |
+| Japanese | 日本語 |
+| Hindi | हिन्दी |
+| Arabic | العربية |
+
+Your choice is saved for the next launch. App labels, statuses, messages, help and tooltips update immediately while the app is idle. Language switching is disabled during a running batch. System-owned dialogs use the selected language after restarting the app.
+
+Arabic uses a right-to-left layout. Filenames, paths and password content remain unchanged when you switch languages.
+
 ## Interface reference
 
-The current application uses German labels.
+The following labels are from the default English interface.
 
 | Control or status | Meaning |
 | --- | --- |
-| **Archive / Hinzufügen** | Archive queue / add files |
-| **Standardziel / Ändern …** | Default extraction folder / change it |
-| **Passwörter** | Password candidates |
-| **Text importieren …** | Import candidates from a text document |
-| **Passwortdatei / Speicherort …** | Saved password file / choose its location |
-| **Erneut laden / speichern** | Retry loading or saving |
-| **Leeren** | Clear the password list and save the empty list |
-| **Start / Stopp** | Start / stop processing |
-| **Fertig / Im Finder** | Extracted successfully / reveal output in Finder |
-| **Kein Treffer** | No candidate completed the archive test successfully |
-| **Fehler / Gestoppt** | Processing error / stopped |
+| **Archives / Add** | Archive queue / add files |
+| **DEFAULT DESTINATION / Change…** | Default extraction folder / change it |
+| **Passwords** | Password candidates |
+| **Import text…** | Import candidates from a text document |
+| **Password file / Location…** | Saved password file / choose its location |
+| **Reload / save again** | Retry loading or saving |
+| **Clear** | Clear the password list and save the empty list |
+| **Start / Stop** | Start / stop processing |
+| **Done / Show in Finder** | Extracted successfully / reveal output in Finder |
+| **No match** | No candidate completed the archive test successfully |
+| **Error / Stopped** | Processing error / stopped |
 
 The context menu on a completed archive can copy its matching password. Keep the password pane in mind when sharing screenshots.
 
@@ -51,13 +71,13 @@ gamma	Delta!
 
 This produces four candidates: `alpha`, `beta`, `gamma`, and `Delta!`. In the example, the gap before `Delta!` is a tab. Punctuation and capitalization are kept. An identical UTF-8 candidate appears once; distinct Unicode byte sequences remain distinct candidates.
 
-A password containing literal spaces should be entered **manually**. Manually entered passwords retain leading, trailing, and internal spaces in the app's saved list. The saved file uses one exact password per line; loading that file at startup preserves those spaces. Importing it through **Text importieren …** applies the whitespace-splitting rule instead.
+A password containing literal spaces should be entered **manually**. Manually entered passwords retain leading, trailing, and internal spaces in the app's saved list. The saved file uses one exact password per line; loading that file at startup preserves those spaces. Importing it through **Import text…** applies the whitespace-splitting rule instead.
 
 ## Keeping a password list on a volume
 
-At first launch, choose a password-file location. The app remembers that path and offers to use or change it on subsequent launches. To change it later, choose **Passwortdatei → Speicherort …**.
+At first launch, choose a password-file location. The app remembers that path and offers to use or change it on subsequent launches. To change it later, click **Location…** under **Password file**.
 
-Adding, importing, removing, and clearing entries automatically updates the chosen file. The file is plain text. Only its path is stored in the app's preferences.
+Adding, importing, removing, and clearing entries automatically updates the chosen file. The file is plain text. Its path, rather than the password contents, is stored in the app's preferences.
 
 When you switch to another location, current entries are merged with entries already present there. Unreadable files are not replaced by empty lists.
 
@@ -65,7 +85,7 @@ If the volume is disconnected or a write fails:
 
 - The current list stays in memory.
 - The storage status reports that changes have not been saved.
-- Reconnect the volume and choose **Erneut laden / speichern**, or select another location.
+- Reconnect the volume and choose **Reload / save again**, or select another location.
 - The app asks before quitting with unsaved changes.
 
 If another program changes the saved file, ArchivBatch reports the conflict. An explicit reload merges the file's contents with the current list before another save.
@@ -76,9 +96,9 @@ Successful output is placed in a separate folder for each archive. Existing file
 
 The engine checks listed paths before extraction, rejects links and unsafe paths, extracts into a temporary folder, checks the extracted tree, and moves successful results into the final output location. Failed or cancelled attempts are not presented as completed output.
 
-**Kein Treffer** can also result from damaged encrypted data: a failed encrypted checksum does not establish whether the password was wrong or the archive was damaged. **Fehler** identifies a processing failure, such as an unreadable file or unsupported content. The queue continues after either result.
+**No match** can also result from damaged encrypted data: a failed encrypted checksum does not establish whether the password was wrong or the archive was damaged. **Error** identifies a processing failure, such as an unreadable file or unsupported content. The queue continues after either result.
 
-**Stopp** cancels the current operation. A subsequent **Start** processes unfinished or unsuccessful entries again; completed entries are skipped. Completed output remains available in Finder.
+**Stop** cancels the current operation. A subsequent **Start** processes unfinished or unsuccessful entries again; completed entries are skipped. Completed output remains available in Finder.
 
 ## Installing a release
 

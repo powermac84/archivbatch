@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.2.0
+
+### Added
+
+- English as the default interface language, independent of the macOS language.
+- A saved language selector in the window header and the Language menu.
+- German, French, Spanish, Brazilian Portuguese, Simplified Chinese, Japanese, Hindi and Arabic interfaces.
+- Immediate updates to app labels, statuses, messages, help and tooltips while idle.
+- Right-to-left layout for Arabic, with filenames, paths and password content preserved.
+- Fourteen localization tests for complete catalogs, format arguments, fallback behavior, live messages, persisted preferences and exact user text.
+- Native UI checks for all nine supported languages.
+
+### Changed
+
+- Language switching is available while idle; system-owned dialogs adopt the selection after an app restart.
+- Progress phases use language-independent identifiers, so translated messages do not change queue behavior.
+- Documentation and screenshots now use the default English interface.
+
 ## 1.1.0
 
 ### Added

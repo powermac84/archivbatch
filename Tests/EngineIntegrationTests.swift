@@ -171,7 +171,7 @@ struct EngineIntegrationTests {
             let destination = workspace.appendingPathComponent("wrong-output")
             let result = run(headerArchive, passwords: ["wrong-a", "wrong-b"], root: destination)
             guard case .noMatch(let message) = result else { throw CheckFailure(description: description(result)) }
-            try check(!message.contains("wrong-a") && !message.contains("wrong-b"), "Diagnostic leaks candidate values")
+            try check(!message.rendered().contains("wrong-a") && !message.rendered().contains("wrong-b"), "Diagnostic leaks candidate values")
             try check(!fm.fileExists(atPath: destination.path), "Wrong password created output")
         }
         test("Malformed archive marked failure and leaves no output") {

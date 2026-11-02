@@ -13,17 +13,17 @@ enum PasswordStorageError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unsupportedText:
-            return "Die Datei ist keine lesbare UTF-8-, UTF-16- oder RTF-Textdatei."
+            return T("storage.unsupported_text")
         case .invalidPath:
-            return "Bitte einen lokalen Dateipfad auf dem gewünschten Volume wählen."
+            return T("storage.invalid_path")
         case .unavailableDirectory:
-            return "Der Ordner der Passwortliste ist nicht verfügbar. Bitte das Volume verbinden oder einen anderen Speicherort wählen."
+            return T("storage.unavailable")
         case .unsuitableFile:
-            return "Die Passwortliste muss eine normale Datei sein, kein Ordner oder symbolischer Link."
+            return T("storage.unsuitable")
         case .invalidPassword:
-            return "Ein Passwort enthält einen Zeilenumbruch oder ein Nullzeichen und kann so nicht gespeichert werden."
+            return T("storage.invalid_password")
         case .externalChange:
-            return "Die Passwortdatei wurde außerhalb der App geändert oder gelöscht. Bitte erneut laden, um vorhandene und aktuelle Passwörter zusammenzuführen."
+            return T("storage.external_change")
         }
     }
 }

@@ -33,6 +33,7 @@ Drag files in from Finder, add your password candidates, and press **Start**. Ar
 | **Remembered storage** | Keep the password list on a volume you choose. Confirm or change its path at startup. |
 | **Output where you need it** | Choose a default extraction folder, with a separate destination for any archive. |
 | **A queue that keeps going** | See successes, unmatched archives, and errors. Stop processing and restart unfinished items. |
+| **Nine interface languages** | Start in English, then choose a remembered language from the globe menu. |
 
 7z, ZIP, RAR, and RAR5 are supported through the bundled **7-Zip 26.03** engine. Additional formats depend on 7-Zip's support. The app tries only the candidates you supply, beginning with an unencrypted check.
 
@@ -40,10 +41,10 @@ Drag files in from Finder, add your password candidates, and press **Start**. Ar
 
 1. **Choose the password file.** Pick its location on your Mac or a mounted volume. Changes to the list save automatically.
 2. **Choose an extraction folder.** Drop your archives into the queue; set individual destinations where needed.
-3. **Add the possibilities.** Enter passwords one by one or choose **Text importieren …** to import a text file.
+3. **Add the possibilities.** Enter passwords one by one or choose **Import text…** to import a text file.
 4. **Press Start.** Watch the current attempt, then open completed output in Finder.
 
-The current app interface is in **German**; this documentation is in English. See the [control reference and full guide](docs/usage.md).
+**English is the default interface language**, regardless of your macOS language. Choose another language from the globe **Language** control or the **Language** menu: German, French, Spanish, Brazilian Portuguese, Simplified Chinese, Japanese, Hindi or Arabic. The choice is saved. See the [language settings and full guide](docs/usage.md#choosing-a-language).
 
 Each completed archive gets a separate output folder. Existing destination files are preserved, and name collisions produce a new folder name. Unsuccessful extractions are kept out of the finished output.
 
@@ -76,16 +77,17 @@ cd archivbatch
 
 The build creates `dist/ArchivBatch.app` for Apple Silicon and Intel, bundles the extraction engine and license notices, and verifies the local signature.
 
-Run the archive and password-storage regression suites:
+Run the archive, password-storage and localization regression suites:
 
 ```sh
 /bin/bash Tests/run-engine-tests.sh
 /bin/bash Tests/run-password-tests.sh
+/bin/bash Tests/run-localization-tests.sh
 ```
 
-The suites contain **32 integration tests**, including real encrypted 7z, AES-ZIP, ZipCrypto, RAR4, and RAR5 archives; exact extracted-content checks; output collisions; cancellation; Unicode; storage across a process restart; missing volumes; and external file edits. A [native UI check](CONTRIBUTING.md#validation) exercises the batch model and renders the interface.
+The suites contain **46 tests**, covering real encrypted archives, exact extracted contents, output collisions, cancellation, password storage, missing volumes, external file edits, all nine translation catalogs, saved language preferences and exact user-text bytes. A [native UI check](CONTRIBUTING.md#validation) exercises the batch model and renders every supported language.
 
-Runtime and UI verification has been performed on Apple Silicon. The Intel build is compiled and its architecture is checked; it has not been run on Intel hardware.
+Native UI checks run on Apple Silicon. GitHub Actions runs the regression suites and universal build on Apple Silicon and Intel runners.
 
 ## License & credits
 

@@ -10,7 +10,10 @@ struct UICheck {
     static var model: BatchModel!
     static var preferences: UserDefaults!
     static var suite: String!
+    static let localization = AppLocalization.shared
     static func main() {
+        localization.select(.english, persist: false)
+        localization.configureNativeLanguage()
         let app = NSApplication.shared
         app.setActivationPolicy(.regular)
         do {
@@ -19,12 +22,12 @@ struct UICheck {
             let source = root.appendingPathComponent("source")
             try FileManager.default.createDirectory(at: source, withIntermediateDirectories: false)
             try Data("Verified payload".utf8).write(to: source.appendingPathComponent("payload.txt"))
-            let enc = root.appendingPathComponent("Beispiel A.7z")
-            let plain = root.appendingPathComponent("Beispiel B.zip")
-            let unmatched = root.appendingPathComponent("Kein Treffer.7z")
-            let bad = root.appendingPathComponent("Fehler.rar")
-            let tail = root.appendingPathComponent("Danach weiter.zip")
-            for (url, password) in [(enc," richtig "),(plain,""),(unmatched,"nicht in liste"),(tail,"")] {
+            let enc = root.appendingPathComponent("Sample A.7z")
+            let plain = root.appendingPathComponent("Sample B.zip")
+            let unmatched = root.appendingPathComponent("No match.7z")
+            let bad = root.appendingPathComponent("Invalid.rar")
+            let tail = root.appendingPathComponent("Continue.zip")
+            for (url, password) in [(enc," correct "),(plain,""),(unmatched,"not in the list"),(tail,"")] {
                 let p = Process()
                 p.executableURL = Bundle.main.url(forResource: "7zz", withExtension: nil)!
                 p.arguments = ["a", url.path, source.appendingPathComponent("payload.txt").path, "-y"] + (password.isEmpty ? [] : ["-p" + password])
@@ -39,8 +42,8 @@ struct UICheck {
             try FileManager.default.createDirectory(at: storeDirectory, withIntermediateDirectories: false)
             let listFile = storeDirectory.appendingPathComponent("Passwoerter.txt")
             try model.usePasswordList(at: listFile)
-            let candidateCount = model.addPasswordLines("\u{FEFF}falsch\r\n richtig \r\n richtig \n\nUnicode 🔑")
-            precondition(candidateCount == 3 && model.passwords[1].value == " richtig ")
+            let candidateCount = model.addPasswordLines("\u{FEFF}incorrect\r\n correct \r\n correct \n\nUnicode 🔑")
+            precondition(candidateCount == 3 && model.passwords[1].value == " correct ")
             let input = root.appendingPathComponent("Import.txt")
             try Data("alpha   beta\tgamma\n\nalpha".utf8).write(to: input)
             let imported = try model.importPasswordFile(input)
@@ -56,7 +59,7 @@ struct UICheck {
             model.passwords.removeAll()
             let afterClear = try PasswordListStorage(defaults: preferences).load(from: listFile)
             precondition(afterClear.isEmpty)
-            model.addPasswordLines("\u{FEFF}falsch\r\n richtig \r\n\nUnicode 🔑")
+            model.addPasswordLines("\u{FEFF}incorrect\r\n correct \r\n\nUnicode 🔑")
             let disconnected = root.appendingPathComponent("Volume-offline")
             try FileManager.default.moveItem(at: storeDirectory, to: disconnected)
             model.addPasswordLines("voruebergehend")
@@ -100,10 +103,10 @@ struct UICheck {
         // Public screenshots use sample locations and concise example result text.
         model.passwordListURL = URL(fileURLWithPath: "/Volumes/Archive Library/ArchivBatch-Passwords.txt")
         if let failed = model.archives.firstIndex(where: { $0.state == .failed }) {
-            model.archives[failed].detail = "Das Archiv ist beschädigt oder das Format wird nicht unterstützt."
+            model.archives[failed].detail = M("engine.list_failed")
         }
         if let unmatched = model.archives.firstIndex(where: { $0.state == .unmatched }) {
-            model.archives[unmatched].detail = "Kein passendes Passwort gefunden. Das Archiv kann auch beschädigt sein."
+            model.archives[unmatched].detail = M("engine.no_match")
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             capture("Reports/ui-completed.png")
@@ -112,18 +115,37 @@ struct UICheck {
             model.activeArchiveID = model.archives[0].id
             model.archives[0].output = nil
             model.archives[0].state = .testing
-            model.archives[0].detail = "Passwort 2 von 3"
+            model.archives[0].detail = M("attempt.password", 2, 3)
             model.completed = 0
-            model.message = "Batch gestartet."
+            model.message = M("queue.started")
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                 capture("Reports/ui-active.png")
-                print("PASS UI screenshots saved.")
-                preferences.removePersistentDomain(forName: suite)
-                try? FileManager.default.removeItem(at: root)
-                exit(0)
+                print("PASS UI English screenshots saved.")
+                captureLanguage(0)
             }
         }
     }
+    static func captureLanguage(_ index: Int) {
+        guard index < AppLanguage.allCases.count else {
+            localization.select(.english, persist: false)
+            preferences.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: root)
+            print("PASS UI all nine languages: same queue and password bytes, localized details and RTL layout.")
+            exit(0)
+        }
+        let language = AppLanguage.allCases[index]
+        let values = model.passwords.map { Data($0.value.utf8) }
+        let paths = model.archives.map { $0.url.path }
+        localization.select(language, persist: false)
+        precondition(values == model.passwords.map { Data($0.value.utf8) })
+        precondition(paths == model.archives.map { $0.url.path })
+        precondition(model.archives[0].detail.rendered() == localization.text("attempt.password", arguments: [2, 3]))
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            capture("Reports/ui-language-" + language.rawValue + ".png")
+            captureLanguage(index + 1)
+        }
+    }
+
     static func capture(_ path: String) {
         let view = window.contentView!
         view.layoutSubtreeIfNeeded()

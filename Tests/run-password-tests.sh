@@ -6,6 +6,6 @@ mkdir -p .build/ModuleCache Reports
 SDK_PATH="$(xcrun --sdk macosx --show-sdk-path)"
 xcrun swiftc -swift-version 5 -parse-as-library \
   -sdk "$SDK_PATH" -module-cache-path "$PROJECT_DIR/.build/ModuleCache" \
-  -framework AppKit Sources/PasswordStorage.swift Tests/PasswordStorageTests.swift \
+  -framework AppKit Sources/Localization.swift Sources/PasswordStorage.swift Tests/PasswordStorageTests.swift \
   -o .build/password-storage-tests
 .build/password-storage-tests
